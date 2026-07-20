@@ -42,11 +42,17 @@ window.Drive = (function () {
     });
   }
 
+  let onFail = null;
+
   function buildClient() {
     tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: SCOPE,
       callback: () => {},
+      error_callback: (err) => {
+        console.warn("Drive auth", err && err.type);
+        if (onFail) { const f = onFail; onFail = null; f(); }
+      },
     });
   }
 
@@ -54,17 +60,29 @@ window.Drive = (function () {
   function requestToken(interactive) {
     return new Promise((res) => {
       if (!tokenClient) return res(null);
+      let hecho = false;
+      const cerrar = (v) => { if (!hecho) { hecho = true; onFail = null; res(v); } };
+
+      // si el usuario cierra la ventana o Google rechaza, no dejamos la app colgada
+      onFail = () => cerrar(null);
+      const limite = setTimeout(() => cerrar(null), interactive ? 120000 : 8000);
+
       tokenClient.callback = (r) => {
-        if (r.error || !r.access_token) return res(null);
+        clearTimeout(limite);
+        if (r.error || !r.access_token) return cerrar(null);
         token = r.access_token;
         tokenExp = Date.now() + (r.expires_in ? r.expires_in * 1000 : 3600000) - 60000;
         DB.set("mxf-drive-token", { token, tokenExp });
         emit();
-        res(token);
+        cerrar(token);
       };
+
       try {
         tokenClient.requestAccessToken({ prompt: interactive ? "" : "none" });
-      } catch { res(null); }
+      } catch {
+        clearTimeout(limite);
+        cerrar(null);
+      }
     });
   }
 
@@ -103,8 +121,12 @@ window.Drive = (function () {
 
   async function connect() {
     if (!clientId) return false;
-    if (!tokenClient) { try { await gisReady(); buildClient(); } catch { return false; } }
-    const t = await getToken(true);
+    if (!tokenClient) {
+      try { await gisReady(); buildClient(); } catch { return false; }
+    }
+    // Directo a la ventana de Google: cualquier espera previa rompe el vínculo
+    // con el toque del usuario y Safari bloquea la ventana emergente.
+    const t = await requestToken(true);
     return !!t;
   }
 

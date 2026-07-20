@@ -1,5 +1,5 @@
 /* Service worker: permite abrir la aplicación sin conexión */
-const CACHE = "mxf-v1";
+const CACHE = "mxf-v2";
 const SHELL = [
   "./",
   "./index.html",

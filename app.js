@@ -1630,7 +1630,7 @@ function DriveBar({
       if (ok) {
         notify("Drive conectado");
         Drive.flush(notify);
-      } else notify("No se pudo conectar — reintenta");
+      } else notify("No se pudo conectar. Si Safari bloqueó la ventana, permítela y reintenta");
     }
   }, busy ? "Conectando…" : "Conectar"), /*#__PURE__*/React.createElement("button", {
     className: "link-drive",
