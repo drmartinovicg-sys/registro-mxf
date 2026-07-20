@@ -1546,6 +1546,7 @@ input:focus, textarea:focus, select:focus { outline:2px solid #16606B33; border-
 /* ============================================================
    Barra de conexión con Google Drive
    ============================================================ */
+const APP_VERSION = "v4";
 function DriveBar({
   drive,
   notify
@@ -1553,15 +1554,48 @@ function DriveBar({
   const [busy, setBusy] = useState(false);
   const [setup, setSetup] = useState(false);
   const [cid, setCid] = useState("");
+  const [informe, setInforme] = useState(null);
+  const revisar = async () => {
+    setBusy(true);
+    setInforme("Revisando…");
+    setInforme(await Drive.diagnose());
+    setBusy(false);
+  };
+  const panel = informe && /*#__PURE__*/React.createElement("pre", {
+    style: S.informe
+  }, informe, /*#__PURE__*/React.createElement("button", {
+    className: "link-drive",
+    style: {
+      display: "block",
+      marginTop: 8
+    },
+    onClick: () => setInforme(null)
+  }, "cerrar"));
   if (drive.state === "ready" && !drive.pending) {
     return /*#__PURE__*/React.createElement("div", {
-      style: S.driveBar
+      style: {
+        ...S.driveBar,
+        display: "block"
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        flexWrap: "wrap"
+      }
     }, /*#__PURE__*/React.createElement("span", {
       style: S.driveOk
     }, "●"), " Drive conectado — las fotos se suben solas", /*#__PURE__*/React.createElement("button", {
       className: "link-drive",
+      disabled: busy,
+      onClick: revisar
+    }, "revisar"), /*#__PURE__*/React.createElement("button", {
+      className: "link-drive",
       onClick: () => Drive.disconnect()
-    }, "desconectar"));
+    }, "desconectar"), /*#__PURE__*/React.createElement("span", {
+      style: S.ver
+    }, APP_VERSION)), panel);
   }
   if (drive.state === "ready" && drive.pending) {
     return /*#__PURE__*/React.createElement("div", {
@@ -1581,7 +1615,9 @@ function DriveBar({
       style: {
         marginBottom: 8
       }
-    }, /*#__PURE__*/React.createElement("b", null, "Conectar Google Drive."), " Pega aquí el ID de cliente que creaste en Google Cloud."), /*#__PURE__*/React.createElement("div", {
+    }, /*#__PURE__*/React.createElement("b", null, "Conectar Google Drive."), " Pega aquí el ID de cliente que creaste en Google Cloud.", /*#__PURE__*/React.createElement("span", {
+      style: S.ver
+    }, APP_VERSION)), /*#__PURE__*/React.createElement("div", {
       style: {
         display: "flex",
         gap: 8,
@@ -1615,7 +1651,9 @@ function DriveBar({
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: S.driveOff
-  }, "●"), "Drive desconectado", drive.pending ? ` — ${drive.pending} pendientes` : "", /*#__PURE__*/React.createElement("button", {
+  }, "●"), "Drive desconectado", drive.pending ? ` — ${drive.pending} pendientes` : "", /*#__PURE__*/React.createElement("span", {
+    style: S.ver
+  }, APP_VERSION), /*#__PURE__*/React.createElement("button", {
     className: "btn-primary",
     style: {
       padding: "5px 12px",
@@ -1664,6 +1702,27 @@ Object.assign(S, {
   driveWait: {
     color: "#B4690E",
     fontSize: 15
+  },
+  ver: {
+    fontFamily: "'IBM Plex Mono', monospace",
+    fontSize: 10.5,
+    color: "#8A9491",
+    marginLeft: "auto",
+    letterSpacing: ".06em"
+  },
+  informe: {
+    fontFamily: "'IBM Plex Mono', monospace",
+    fontSize: 11.5,
+    lineHeight: 1.6,
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    background: "#fff",
+    border: "1px solid #C9D2D0",
+    borderRadius: 6,
+    padding: "10px 12px",
+    marginTop: 10,
+    marginBottom: 0,
+    color: "#1B2A2F"
   }
 });
 

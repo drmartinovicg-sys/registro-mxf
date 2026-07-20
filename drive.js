@@ -238,7 +238,68 @@ window.Drive = (function () {
     return r.json();
   }
 
-  /* ---------- cola de subida ---------- */
+  /* ---------- diagnóstico ---------- */
+  async function diagnose() {
+    const log = [];
+    const paso = async (etiqueta, fn) => {
+      try {
+        const r = await fn();
+        log.push(`✓ ${etiqueta}: ${r}`);
+        return r;
+      } catch (e) {
+        log.push(`✗ ${etiqueta}: ${e.message}`);
+        throw e;
+      }
+    };
+
+    try {
+      await paso("token", async () => {
+        const t = await getToken(false);
+        if (!t) throw new Error("sin token — reconecta");
+        return "ok";
+      });
+
+      const root = await paso("carpeta raíz", async () => {
+        const r = await ensureRoot();
+        return r.id ? r.id.slice(0, 12) + "…" : "SIN ID";
+      });
+
+      const cat = await paso("carpeta categoría", async () => {
+        const c = await ensureCategory("trauma", "Trauma facial");
+        return c.id ? c.id.slice(0, 12) + "…" : "SIN ID";
+      });
+
+      const pf = await paso("carpeta paciente", async () => {
+        const f = await folderForPatient("trauma", "Trauma facial", "PRUEBA — borrar");
+        if (!f.id) throw new Error("carpeta sin id");
+        return f.id.slice(0, 12) + "…";
+      });
+
+      const folder = await folderForPatient("trauma", "Trauma facial", "PRUEBA — borrar");
+      let archivoId = null;
+
+      await paso("subir imagen de prueba", async () => {
+        const px =
+          "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+        const r = await uploadImage(folder.id, "prueba.png", px);
+        archivoId = r.id;
+        return archivoId ? archivoId.slice(0, 12) + "…" : "SIN ID";
+      });
+
+      await paso("verificar ubicación", async () => {
+        if (!archivoId) return "sin archivo que verificar";
+        const info = await api(
+          `https://www.googleapis.com/drive/v3/files/${archivoId}?fields=id,name,parents`
+        );
+        const padres = info.parents || [];
+        if (!padres.length) return "SIN PADRE — quedó en la raíz";
+        if (padres[0] === folder.id) return "correcta";
+        return `padre inesperado ${padres[0].slice(0, 12)}… (esperado ${folder.id.slice(0, 12)}…)`;
+      });
+    } catch { /* ya quedó registrado en el log */ }
+
+    return log.join("\n");
+  }
   async function enqueue(patientId, photoId) {
     const q = (await DB.get("mxf-drive-queue")) || [];
     if (!q.some((x) => x.photoId === photoId)) q.push({ patientId, photoId });
@@ -295,6 +356,6 @@ window.Drive = (function () {
 
   return {
     init, status, onChange, saveClientId, connect, disconnect,
-    folderForPatient, enqueue, flush,
+    folderForPatient, enqueue, flush, diagnose,
   };
 })();

@@ -1,14 +1,10 @@
-/* Service worker: permite abrir la aplicación sin conexión */
-const CACHE = "mxf-v2";
+/* Service worker: permite abrir la aplicación sin conexión.
+   Estrategia: red primero para los archivos propios (así las
+   actualizaciones llegan siempre), caché como respaldo. */
+const CACHE = "mxf-v4";
 const SHELL = [
-  "./",
-  "./index.html",
-  "./db.js",
-  "./drive.js",
-  "./app.js",
-  "./manifest.webmanifest",
-  "./icon-192.png",
-  "./icon-512.png",
+  "./", "./index.html", "./db.js", "./drive.js", "./app.js",
+  "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "https://unpkg.com/react@18.3.1/umd/react.production.min.js",
   "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js",
 ];
@@ -31,22 +27,37 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const url = e.request.url;
-  // Nunca interceptar Google (autorización y API de Drive)
   if (url.includes("googleapis.com") || url.includes("accounts.google.com") || url.includes("gstatic.com")) return;
   if (e.request.method !== "GET") return;
 
-  e.respondWith(
-    caches.match(e.request).then((hit) => {
-      if (hit) return hit;
-      return fetch(e.request)
+  const propio = url.startsWith(self.location.origin);
+
+  if (propio) {
+    // red primero: siempre la versión más reciente cuando hay señal
+    e.respondWith(
+      fetch(e.request)
         .then((res) => {
-          if (res && res.ok && res.type === "basic") {
-            const copy = res.clone();
-            caches.open(CACHE).then((c) => c.put(e.request, copy));
+          if (res && res.ok) {
+            const copia = res.clone();
+            caches.open(CACHE).then((c) => c.put(e.request, copia));
           }
           return res;
         })
-        .catch(() => caches.match("./index.html"));
-    })
+        .catch(() => caches.match(e.request).then((hit) => hit || caches.match("./index.html")))
+    );
+    return;
+  }
+
+  // recursos externos (React): caché primero, son fijos
+  e.respondWith(
+    caches.match(e.request).then((hit) =>
+      hit || fetch(e.request).then((res) => {
+        if (res && res.ok) {
+          const copia = res.clone();
+          caches.open(CACHE).then((c) => c.put(e.request, copia));
+        }
+        return res;
+      })
+    )
   );
 });
