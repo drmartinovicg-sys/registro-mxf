@@ -212,6 +212,7 @@ window.Drive = (function () {
   }
 
   async function uploadImage(folderId, name, dataUrl) {
+    if (!folderId) throw new Error("sin carpeta de destino");
     const t = await getToken(false);
     if (!t) throw new Error("sin token");
     const mime = (dataUrl.match(/^data:([^;]+);/) || [])[1] || "image/jpeg";
@@ -324,7 +325,7 @@ window.Drive = (function () {
         if (!patient || !photo) { q.shift(); continue; }
 
         let folder = patient.driveFolder;
-        if (!folder) {
+        if (!folder || !folder.id) {
           const cats = window.MXF_CATS || [];
           const cat = cats.find((c) => c.id === patient.catDx) || { id: "otro", label: "Otro" };
           const mes = (patient.fechaCirugia || patient.creado || "").slice(0, 7);

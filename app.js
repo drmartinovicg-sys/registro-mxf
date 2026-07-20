@@ -781,6 +781,17 @@ function PatientView({
     }
   }, /*#__PURE__*/React.createElement("button", {
     className: "btn-ghost",
+    onClick: async () => {
+      if (!patient.photoIds.length) {
+        notify("Esta ficha no tiene fotos");
+        return;
+      }
+      notify("Reenviando fotos a Drive…");
+      for (const pid of patient.photoIds) await Drive.enqueue(patient.id, pid);
+      Drive.flush(notify);
+    }
+  }, "↻ Reenviar fotos"), /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
     onClick: () => exportPatientHTML(patient, notify)
   }, "⇩ Exportar"), /*#__PURE__*/React.createElement("button", {
     className: "btn-ghost",
@@ -1546,7 +1557,7 @@ input:focus, textarea:focus, select:focus { outline:2px solid #16606B33; border-
 /* ============================================================
    Barra de conexión con Google Drive
    ============================================================ */
-const APP_VERSION = "v4";
+const APP_VERSION = "v5";
 function DriveBar({
   drive,
   notify
