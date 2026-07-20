@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Registro Clínico — Cirugía Maxilofacial</title>
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#10393F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Fichas MXF">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" href="icon-192.png">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  html, body { margin:0; padding:0; background:#F4F6F5; -webkit-text-size-adjust:100%; }
+  body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+  #boot { font-family:'IBM Plex Sans',-apple-system,sans-serif; color:#66716F;
+          text-align:center; padding:80px 20px; font-size:14px; }
+  #boot b { display:block; font-family:'IBM Plex Mono',monospace; font-size:11px;
+            letter-spacing:.18em; color:#10393F; margin-bottom:10px; }
+</style>
+</head>
+<body>
+  <div id="root"><div id="boot"><b>CIRUGÍA MAXILOFACIAL</b>Abriendo el registro…</div></div>
+
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="db.js"></script>
+  <script src="drive.js"></script>
+  <script src="app.js"></script>
+
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("sw.js").catch(function () {});
+      });
+    }
+  </script>
+</body>
+</html>
