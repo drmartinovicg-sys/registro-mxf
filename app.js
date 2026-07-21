@@ -155,7 +155,8 @@ function App() {
       setIndex(idx || []);
       setLoading(false);
       Drive.onChange(setDrive);
-      await Drive.init();
+      const ds = await Drive.init();
+      if (ds.state === "ready") await Drive.ensureAllCategories(false);
       Drive.flush(notify);
     })();
   }, []);
@@ -1557,7 +1558,7 @@ input:focus, textarea:focus, select:focus { outline:2px solid #16606B33; border-
 /* ============================================================
    Barra de conexión con Google Drive
    ============================================================ */
-const APP_VERSION = "v5";
+const APP_VERSION = "v6";
 function DriveBar({
   drive,
   notify
@@ -1677,7 +1678,9 @@ function DriveBar({
       const ok = await Drive.connect();
       setBusy(false);
       if (ok) {
-        notify("Drive conectado");
+        notify("Drive conectado — preparando carpetas…");
+        const n = await Drive.ensureAllCategories(true);
+        notify(n ? `Drive conectado — ${n} carpetas listas` : "Drive conectado");
         Drive.flush(notify);
       } else notify("No se pudo conectar. Si Safari bloqueó la ventana, permítela y reintenta");
     }

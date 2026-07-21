@@ -201,6 +201,21 @@ window.Drive = (function () {
     return ensureFolder(`mxf-drive-cat:${catId}`, catLabel, root.id);
   }
 
+  // Crea de una vez las carpetas de las nueve categorías, para que la
+  // estructura quede completa aunque todavía no haya pacientes.
+  async function ensureAllCategories(forzar) {
+    const cats = window.MXF_CATS || [];
+    if (!cats.length) return 0;
+    if (!forzar && (await DB.get("mxf-drive-cats-ok"))) return 0;
+    let creadas = 0;
+    for (const c of cats) {
+      try { await ensureCategory(c.id, c.label); creadas++; }
+      catch (e) { console.error("categoría " + c.label, e); }
+    }
+    if (creadas === cats.length) await DB.set("mxf-drive-cats-ok", true);
+    return creadas;
+  }
+
   async function folderForPatient(catId, catLabel, nombre) {
     const cat = await ensureCategory(catId, catLabel);
     const found = (await findFolder(nombre, cat.id)) || (await makeFolder(nombre, cat.id));
@@ -357,6 +372,6 @@ window.Drive = (function () {
 
   return {
     init, status, onChange, saveClientId, connect, disconnect,
-    folderForPatient, enqueue, flush, diagnose,
+    folderForPatient, enqueue, flush, diagnose, ensureAllCategories,
   };
 })();
