@@ -1647,7 +1647,7 @@ input:focus, textarea:focus, select:focus { outline:2px solid #16606B33; border-
 /* ============================================================
    Barra de conexión con Google Drive
    ============================================================ */
-const APP_VERSION = "v8";
+const APP_VERSION = "v10";
 function DriveBar({
   drive,
   notify
@@ -1845,6 +1845,20 @@ function PanelComercial({
   const publicables = useMemo(() => index.filter(e => (!proc || (e.procedencia || "consulta") === proc) && e.consentImg === "difusion" && (e.nFotos || 0) > 0).length, [index, proc]);
   const maxCat = stats.cats.length ? stats.cats[0].n : 1;
   const procLabel = proc ? procById(proc).label : "Todas las procedencias";
+  const bajar = (texto, nombre) => {
+    const blob = new Blob([texto], {
+      type: "text/markdown;charset=utf-8"
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = nombre;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  };
+  const descargarFocos = () => {
+    bajar(C.briefFocos(index), `plan-focos-${todayISO()}.md`);
+    notify("Plan de focos generado");
+  };
   const descargarBrief = () => {
     const md = C.brief(stats, id => catById(id).label, procLabel);
     const blob = new Blob([md], {
@@ -1952,7 +1966,30 @@ function PanelComercial({
       key: i,
       style: S.temaItem
     }, "— ", t)));
-  }))), /*#__PURE__*/React.createElement("div", {
+  }))), /*#__PURE__*/React.createElement(Section, {
+    label: "Focos comerciales"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: S.nota2
+  }, "Tres procedimientos electivos donde el paciente investiga y decide. Los cuadros de urgencia quedan fuera: no responden a publicidad."), C.FOCO_IDS.map(id => {
+    const f = C.FOCOS[id];
+    const cat = catById(f.cat || id);
+    const rx = f.texto ? new RegExp(f.texto, "i") : null;
+    const casos = index.filter(e => (e.procedencia || "consulta") === "consulta" && e.catDx === (f.cat || id) && (!rx || rx.test(e.cirugia || "")));
+    const pub = casos.filter(e => e.consentImg === "difusion" && (e.nFotos || 0) > 0).length;
+    return /*#__PURE__*/React.createElement("div", {
+      key: id,
+      style: {
+        ...S.focoCard,
+        borderLeftColor: cat.color
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: S.focoTit
+    }, f.tema), /*#__PURE__*/React.createElement("div", {
+      style: S.focoDatos
+    }, casos.length, " ", casos.length === 1 ? "caso" : "casos", " · ", pub, " publicable", pub === 1 ? "" : "s"), /*#__PURE__*/React.createElement("div", {
+      style: S.focoTexto
+    }, f.porque));
+  })), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
       gap: 10,
@@ -1961,9 +1998,12 @@ function PanelComercial({
     }
   }, /*#__PURE__*/React.createElement("button", {
     className: "btn-primary",
+    onClick: descargarFocos
+  }, "⇩ Plan de los tres focos"), /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
     onClick: descargarBrief,
     disabled: !stats.total
-  }, "⇩ Generar brief completo")), /*#__PURE__*/React.createElement("div", {
+  }, "⇩ Brief general")), /*#__PURE__*/React.createElement("div", {
     style: S.nota
   }, "El brief incluye calendario editorial, palabras clave por intención, negativas y las restricciones de plataforma. Se genera con estadística agregada: ningún dato de paciente sale de este dispositivo."));
 }
@@ -2064,6 +2104,36 @@ Object.assign(S, {
     color: "#8A9491",
     lineHeight: 1.7,
     marginTop: 14
+  },
+  nota2: {
+    fontSize: 12,
+    color: "#66716F",
+    lineHeight: 1.65,
+    marginBottom: 12
+  },
+  focoCard: {
+    borderLeft: "3px solid",
+    background: "#fff",
+    border: "1px solid #DCE3E1",
+    borderRadius: 8,
+    padding: "11px 13px",
+    marginBottom: 9
+  },
+  focoTit: {
+    fontSize: 14,
+    fontWeight: 700,
+    color: "#10393F"
+  },
+  focoDatos: {
+    fontFamily: "'IBM Plex Mono', monospace",
+    fontSize: 11,
+    color: "#66716F",
+    margin: "3px 0 6px"
+  },
+  focoTexto: {
+    fontSize: 12.5,
+    color: "#4A5654",
+    lineHeight: 1.6
   }
 });
 
