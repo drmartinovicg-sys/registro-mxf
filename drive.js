@@ -196,28 +196,38 @@ window.Drive = (function () {
 
   const ensureRoot = () => ensureFolder("mxf-drive-root", ROOT_NAME, null);
 
-  async function ensureCategory(catId, catLabel) {
+  // rama de procedencia: «Pacientes HOSMIL» / «Pacientes Consulta Dr. Martinovic»
+  async function ensureBranch(procId, procLabel) {
     const root = await ensureRoot();
-    return ensureFolder(`mxf-drive-cat:${catId}`, catLabel, root.id);
+    return ensureFolder(`mxf-drive-proc:${procId}`, procLabel, root.id);
+  }
+
+  async function ensureCategory(procId, procLabel, catId, catLabel) {
+    const rama = await ensureBranch(procId, procLabel);
+    return ensureFolder(`mxf-drive-cat:${procId}:${catId}`, catLabel, rama.id);
   }
 
   // Crea de una vez las carpetas de las nueve categorías, para que la
   // estructura quede completa aunque todavía no haya pacientes.
   async function ensureAllCategories(forzar) {
     const cats = window.MXF_CATS || [];
-    if (!cats.length) return 0;
-    if (!forzar && (await DB.get("mxf-drive-cats-ok"))) return 0;
+    const procs = window.MXF_PROCS || [];
+    if (!cats.length || !procs.length) return 0;
+    if (!forzar && (await DB.get("mxf-drive-cats-ok-v2"))) return 0;
+    const total = cats.length * procs.length;
     let creadas = 0;
-    for (const c of cats) {
-      try { await ensureCategory(c.id, c.label); creadas++; }
-      catch (e) { console.error("categoría " + c.label, e); }
+    for (const x of procs) {
+      for (const c of cats) {
+        try { await ensureCategory(x.id, x.label, c.id, c.label); creadas++; }
+        catch (e) { console.error(`${x.label} / ${c.label}`, e); }
+      }
     }
-    if (creadas === cats.length) await DB.set("mxf-drive-cats-ok", true);
+    if (creadas === total) await DB.set("mxf-drive-cats-ok-v2", true);
     return creadas;
   }
 
-  async function folderForPatient(catId, catLabel, nombre) {
-    const cat = await ensureCategory(catId, catLabel);
+  async function folderForPatient(procId, procLabel, catId, catLabel, nombre) {
+    const cat = await ensureCategory(procId, procLabel, catId, catLabel);
     const found = (await findFolder(nombre, cat.id)) || (await makeFolder(nombre, cat.id));
     return {
       id: found.id,
@@ -280,18 +290,23 @@ window.Drive = (function () {
         return r.id ? r.id.slice(0, 12) + "…" : "SIN ID";
       });
 
-      const cat = await paso("carpeta categoría", async () => {
-        const c = await ensureCategory("trauma", "Trauma facial");
+      await paso("carpeta procedencia", async () => {
+        const r = await ensureBranch("hosmil", "Pacientes HOSMIL");
+        return r.id ? r.id.slice(0, 12) + "…" : "SIN ID";
+      });
+
+      await paso("carpeta categoría", async () => {
+        const c = await ensureCategory("hosmil", "Pacientes HOSMIL", "trauma", "Trauma facial");
         return c.id ? c.id.slice(0, 12) + "…" : "SIN ID";
       });
 
-      const pf = await paso("carpeta paciente", async () => {
-        const f = await folderForPatient("trauma", "Trauma facial", "PRUEBA — borrar");
+      await paso("carpeta paciente", async () => {
+        const f = await folderForPatient("hosmil", "Pacientes HOSMIL", "trauma", "Trauma facial", "PRUEBA — borrar");
         if (!f.id) throw new Error("carpeta sin id");
         return f.id.slice(0, 12) + "…";
       });
 
-      const folder = await folderForPatient("trauma", "Trauma facial", "PRUEBA — borrar");
+      const folder = await folderForPatient("hosmil", "Pacientes HOSMIL", "trauma", "Trauma facial", "PRUEBA — borrar");
       let archivoId = null;
 
       await paso("subir imagen de prueba", async () => {
@@ -342,10 +357,13 @@ window.Drive = (function () {
         let folder = patient.driveFolder;
         if (!folder || !folder.id) {
           const cats = window.MXF_CATS || [];
+          const procs = window.MXF_PROCS || [];
           const cat = cats.find((c) => c.id === patient.catDx) || { id: "otro", label: "Otro" };
+          const proc = procs.find((x) => x.id === (patient.procedencia || "consulta")) ||
+                       { id: "consulta", label: "Pacientes Consulta Dr. Martinovic" };
           const mes = (patient.fechaCirugia || patient.creado || "").slice(0, 7);
           const nombre = `${patient.nombre}${patient.cirugia ? " — " + patient.cirugia : ""} (${mes})`;
-          folder = await folderForPatient(cat.id, cat.label, nombre);
+          folder = await folderForPatient(proc.id, proc.label, cat.id, cat.label, nombre);
           await DB.set(`mxf-p:${job.patientId}`, { ...patient, driveFolder: folder });
         }
 
@@ -372,6 +390,6 @@ window.Drive = (function () {
 
   return {
     init, status, onChange, saveClientId, connect, disconnect,
-    folderForPatient, enqueue, flush, diagnose, ensureAllCategories,
+    folderForPatient, enqueue, flush, diagnose, ensureAllCategories, ensureBranch,
   };
 })();

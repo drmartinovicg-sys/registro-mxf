@@ -50,6 +50,20 @@ const CATS = [{
 }];
 const catById = id => CATS.find(c => c.id === id) || CATS[CATS.length - 1];
 window.MXF_CATS = CATS;
+const PROCS = [{
+  id: "hosmil",
+  label: "Pacientes HOSMIL",
+  corto: "HOSMIL",
+  color: "#16606B"
+}, {
+  id: "consulta",
+  label: "Pacientes Consulta Dr. Martinovic",
+  corto: "Consulta",
+  color: "#6B2D5C"
+}];
+// las fichas antiguas, sin este campo, se consideran de consulta
+const procById = id => PROCS.find(x => x.id === id) || PROCS[1];
+window.MXF_PROCS = PROCS;
 const EVO_TYPES = ["Control clínico", "Control imagenológico", "Curación", "Retiro de suturas", "Complicación", "Indicaciones", "Otro"];
 const PHOTO_TAGS = ["Pre-op", "Intra-op", "Post-op", "RX / Imagen"];
 const TAG_COLORS = {
@@ -122,6 +136,7 @@ const emptyPatient = () => ({
   antecedentes: "",
   alergias: "",
   medicamentos: "",
+  procedencia: "hosmil",
   catDx: "dentoalveolar",
   diagnostico: "",
   cirugia: "",
@@ -137,6 +152,7 @@ const emptyPatient = () => ({
 function App() {
   const [drive, setDrive] = useState(Drive.status());
   const [screen, setScreen] = useState("list"); // list | form | patient
+  const [filterProc, setFilterProc] = useState(null);
   const [index, setIndex] = useState([]);
   const [loading, setLoading] = useState(true);
   const [patient, setPatient] = useState(null);
@@ -169,6 +185,7 @@ function App() {
     folio: p.folio,
     nombre: p.nombre,
     rut: p.rut,
+    procedencia: p.procedencia || "consulta",
     catDx: p.catDx,
     diagnostico: p.diagnostico,
     cirugia: p.cirugia,
@@ -207,11 +224,12 @@ function App() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return index.filter(e => {
+      if (filterProc && (e.procedencia || "consulta") !== filterProc) return false;
       if (filterCat && e.catDx !== filterCat) return false;
       if (!q) return true;
       return [e.nombre, e.rut, e.folio, e.diagnostico, e.cirugia].some(v => (v || "").toLowerCase().includes(q));
     });
-  }, [index, search, filterCat]);
+  }, [index, search, filterCat, filterProc]);
   const grouped = useMemo(() => {
     if (!groupByDx) return null;
     const g = {};
@@ -325,6 +343,8 @@ function App() {
     setSearch: setSearch,
     filterCat: filterCat,
     setFilterCat: setFilterCat,
+    filterProc: filterProc,
+    setFilterProc: setFilterProc,
     groupByDx: groupByDx,
     setGroupByDx: setGroupByDx,
     onOpen: openPatient,
@@ -390,6 +410,8 @@ function ListScreen({
   setSearch,
   filterCat,
   setFilterCat,
+  filterProc,
+  setFilterProc,
   groupByDx,
   setGroupByDx,
   onOpen,
@@ -413,6 +435,22 @@ function ListScreen({
       marginLeft: -1
     }
   }, "Por diagnóstico")), /*#__PURE__*/React.createElement("div", {
+    style: S.chipRow
+  }, PROCS.map(x => {
+    const n = index.filter(e => (e.procedencia || "consulta") === x.id).length;
+    const on = filterProc === x.id;
+    return /*#__PURE__*/React.createElement("button", {
+      key: x.id,
+      className: "chip",
+      style: {
+        borderColor: x.color,
+        color: on ? "#fff" : x.color,
+        background: on ? x.color : "transparent",
+        fontWeight: 600
+      },
+      onClick: () => setFilterProc(on ? null : x.id)
+    }, x.corto, " · ", n);
+  })), /*#__PURE__*/React.createElement("div", {
     style: S.chipRow
   }, CATS.map(c => {
     const n = index.filter(e => e.catDx === c.id).length;
@@ -633,6 +671,15 @@ function PatientForm({
   })))), /*#__PURE__*/React.createElement(Section, {
     label: "Diagnóstico y cirugía"
   }, /*#__PURE__*/React.createElement(Grid, null, /*#__PURE__*/React.createElement(Field, {
+    label: "Procedencia *"
+  }, /*#__PURE__*/React.createElement("select", {
+    style: S.input,
+    value: p.procedencia || "hosmil",
+    onChange: set("procedencia")
+  }, PROCS.map(x => /*#__PURE__*/React.createElement("option", {
+    key: x.id,
+    value: x.id
+  }, x.label)))), /*#__PURE__*/React.createElement(Field, {
     label: "Categoría diagnóstica *"
   }, /*#__PURE__*/React.createElement("select", {
     style: S.input,
@@ -1161,9 +1208,10 @@ function FotosTab({
 async function createDriveFolderFor(patient) {
   try {
     const cat = catById(patient.catDx);
+    const proc = procById(patient.procedencia);
     const mes = (patient.fechaCirugia || patient.creado || todayISO()).slice(0, 7);
     const nombre = `${patient.nombre}${patient.cirugia ? " — " + patient.cirugia : ""} (${mes})`;
-    return await Drive.folderForPatient(cat.id, cat.label, nombre);
+    return await Drive.folderForPatient(proc.id, proc.label, cat.id, cat.label, nombre);
   } catch (e) {
     console.error("Drive folder", e);
     return null;
@@ -1558,7 +1606,7 @@ input:focus, textarea:focus, select:focus { outline:2px solid #16606B33; border-
 /* ============================================================
    Barra de conexión con Google Drive
    ============================================================ */
-const APP_VERSION = "v6";
+const APP_VERSION = "v7";
 function DriveBar({
   drive,
   notify
