@@ -64,6 +64,19 @@ const PROCS = [{
 // las fichas antiguas, sin este campo, se consideran de consulta
 const procById = id => PROCS.find(x => x.id === id) || PROCS[1];
 window.MXF_PROCS = PROCS;
+const CONSENT = [{
+  id: "no",
+  label: "Sin consentimiento de imagen"
+}, {
+  id: "clinico",
+  label: "Solo uso clínico interno"
+}, {
+  id: "docencia",
+  label: "Docencia y congresos"
+}, {
+  id: "difusion",
+  label: "Docencia y difusión pública"
+}];
 const EVO_TYPES = ["Control clínico", "Control imagenológico", "Curación", "Retiro de suturas", "Complicación", "Indicaciones", "Otro"];
 const PHOTO_TAGS = ["Pre-op", "Intra-op", "Post-op", "RX / Imagen"];
 const TAG_COLORS = {
@@ -137,6 +150,8 @@ const emptyPatient = () => ({
   alergias: "",
   medicamentos: "",
   procedencia: "hosmil",
+  consentImg: "no",
+  consentFecha: "",
   catDx: "dentoalveolar",
   diagnostico: "",
   cirugia: "",
@@ -151,7 +166,7 @@ const emptyPatient = () => ({
 /* ============================================================ */
 function App() {
   const [drive, setDrive] = useState(Drive.status());
-  const [screen, setScreen] = useState("list"); // list | form | patient
+  const [screen, setScreen] = useState("list"); // list | form | patient | panel
   const [filterProc, setFilterProc] = useState(null);
   const [index, setIndex] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -187,6 +202,7 @@ function App() {
     rut: p.rut,
     procedencia: p.procedencia || "consulta",
     catDx: p.catDx,
+    consentImg: p.consentImg || "no",
     diagnostico: p.diagnostico,
     cirugia: p.cirugia,
     fechaCirugia: p.fechaCirugia,
@@ -321,7 +337,13 @@ function App() {
       setEditDraft(emptyPatient());
       setScreen("form");
     }
-  }, "+ Nueva ficha"), screen !== "list" && /*#__PURE__*/React.createElement("button", {
+  }, "+ Nueva ficha"), screen === "list" && /*#__PURE__*/React.createElement("button", {
+    className: "btn-ghost",
+    style: {
+      marginLeft: 8
+    },
+    onClick: () => setScreen("panel")
+  }, "Panel"), screen !== "list" && /*#__PURE__*/React.createElement("button", {
     className: "btn-ghost",
     onClick: () => {
       setScreen("list");
@@ -393,6 +415,9 @@ function App() {
       setPatient(p);
       await savePatient(p);
     },
+    notify: notify
+  }), !loading && screen === "panel" && /*#__PURE__*/React.createElement(PanelComercial, {
+    index: index,
     notify: notify
   })), toast && /*#__PURE__*/React.createElement("div", {
     style: S.toast
@@ -717,6 +742,22 @@ function PatientForm({
     rows: 3,
     value: p.notas,
     onChange: set("notas")
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Consentimiento de imagen"
+  }, /*#__PURE__*/React.createElement("select", {
+    style: S.input,
+    value: p.consentImg || "no",
+    onChange: set("consentImg")
+  }, CONSENT.map(c => /*#__PURE__*/React.createElement("option", {
+    key: c.id,
+    value: c.id
+  }, c.label)))), /*#__PURE__*/React.createElement(Field, {
+    label: "Fecha del consentimiento"
+  }, /*#__PURE__*/React.createElement("input", {
+    type: "date",
+    style: S.input,
+    value: p.consentFecha || "",
+    onChange: set("consentFecha")
   })))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: "flex",
@@ -1606,7 +1647,7 @@ input:focus, textarea:focus, select:focus { outline:2px solid #16606B33; border-
 /* ============================================================
    Barra de conexión con Google Drive
    ============================================================ */
-const APP_VERSION = "v7";
+const APP_VERSION = "v8";
 function DriveBar({
   drive,
   notify
@@ -1785,6 +1826,244 @@ Object.assign(S, {
     marginTop: 10,
     marginBottom: 0,
     color: "#1B2A2F"
+  }
+});
+
+/* ============================================================ */
+
+/* ============================================================
+   Panel comercial
+   Solo estadística agregada. No expone datos de pacientes.
+   ============================================================ */
+function PanelComercial({
+  index,
+  notify
+}) {
+  const [proc, setProc] = useState("consulta");
+  const C = window.MXF_COMERCIAL;
+  const stats = useMemo(() => C.estadisticas(index, proc || null), [index, proc]);
+  const publicables = useMemo(() => index.filter(e => (!proc || (e.procedencia || "consulta") === proc) && e.consentImg === "difusion" && (e.nFotos || 0) > 0).length, [index, proc]);
+  const maxCat = stats.cats.length ? stats.cats[0].n : 1;
+  const procLabel = proc ? procById(proc).label : "Todas las procedencias";
+  const descargarBrief = () => {
+    const md = C.brief(stats, id => catById(id).label, procLabel);
+    const blob = new Blob([md], {
+      type: "text/markdown;charset=utf-8"
+    });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `brief-comercial-${todayISO()}.md`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    notify("Brief generado");
+  };
+  return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: S.panelHead
+  }, /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: S.brandTop
+  }, "INTELIGENCIA COMERCIAL"), /*#__PURE__*/React.createElement("div", {
+    style: S.panelTitle
+  }, "Qué dice tu registro"))), /*#__PURE__*/React.createElement("div", {
+    style: S.chipRow
+  }, PROCS.map(x => /*#__PURE__*/React.createElement("button", {
+    key: x.id,
+    className: "chip",
+    style: {
+      borderColor: x.color,
+      color: proc === x.id ? "#fff" : x.color,
+      background: proc === x.id ? x.color : "transparent",
+      fontWeight: 600
+    },
+    onClick: () => setProc(x.id)
+  }, x.corto)), /*#__PURE__*/React.createElement("button", {
+    className: "chip",
+    style: {
+      borderColor: "#5C5C5C",
+      color: proc === null ? "#fff" : "#5C5C5C",
+      background: proc === null ? "#5C5C5C" : "transparent"
+    },
+    onClick: () => setProc(null)
+  }, "Todas")), proc === "hosmil" && /*#__PURE__*/React.createElement("div", {
+    style: S.aviso
+  }, "Los pacientes del hospital son datos institucionales. Sirven para orientar contenido clínico, no para uso comercial ni para material publicitario."), /*#__PURE__*/React.createElement("div", {
+    style: S.kpiRow
+  }, /*#__PURE__*/React.createElement("div", {
+    style: S.kpi
+  }, /*#__PURE__*/React.createElement("div", {
+    style: S.kpiN
+  }, stats.total), /*#__PURE__*/React.createElement("div", {
+    style: S.kpiL
+  }, "casos")), /*#__PURE__*/React.createElement("div", {
+    style: S.kpi
+  }, /*#__PURE__*/React.createElement("div", {
+    style: S.kpiN
+  }, stats.cats.length), /*#__PURE__*/React.createElement("div", {
+    style: S.kpiL
+  }, "áreas activas")), /*#__PURE__*/React.createElement("div", {
+    style: S.kpi
+  }, /*#__PURE__*/React.createElement("div", {
+    style: S.kpiN
+  }, publicables), /*#__PURE__*/React.createElement("div", {
+    style: S.kpiL
+  }, "casos publicables"))), !stats.total ? /*#__PURE__*/React.createElement("div", {
+    style: S.empty
+  }, /*#__PURE__*/React.createElement("b", null, "Sin casos en esta base"), /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 6
+    }
+  }, "El panel se activa a medida que cargues fichas.")) : /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement(Section, {
+    label: "Mezcla de casos"
+  }, stats.cats.map(c => {
+    const cat = catById(c.id);
+    return /*#__PURE__*/React.createElement("div", {
+      key: c.id,
+      style: S.barRow
+    }, /*#__PURE__*/React.createElement("div", {
+      style: S.barLabel
+    }, cat.label), /*#__PURE__*/React.createElement("div", {
+      style: S.barTrack
+    }, /*#__PURE__*/React.createElement("div", {
+      style: {
+        ...S.barFill,
+        width: `${c.n / maxCat * 100}%`,
+        background: cat.color
+      }
+    })), /*#__PURE__*/React.createElement("div", {
+      style: S.barN
+    }, c.n, " · ", c.pct, "%"));
+  })), stats.top.length > 0 && /*#__PURE__*/React.createElement(Section, {
+    label: "Procedimientos más frecuentes"
+  }, stats.top.map((p, i) => /*#__PURE__*/React.createElement("div", {
+    key: i,
+    style: S.listRow
+  }, /*#__PURE__*/React.createElement("span", null, p.nombre), /*#__PURE__*/React.createElement("b", null, p.n)))), /*#__PURE__*/React.createElement(Section, {
+    label: "Prioridad de contenidos"
+  }, stats.cats.slice(0, 3).map(c => {
+    const v = C.VOCAB[c.id];
+    if (!v) return null;
+    return /*#__PURE__*/React.createElement("div", {
+      key: c.id,
+      style: {
+        marginBottom: 14
+      }
+    }, /*#__PURE__*/React.createElement("div", {
+      style: S.temaTit
+    }, v.tema, " · ", c.pct, "%"), v.contenidos.slice(0, 3).map((t, i) => /*#__PURE__*/React.createElement("div", {
+      key: i,
+      style: S.temaItem
+    }, "— ", t)));
+  }))), /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: "flex",
+      gap: 10,
+      marginTop: 18,
+      flexWrap: "wrap"
+    }
+  }, /*#__PURE__*/React.createElement("button", {
+    className: "btn-primary",
+    onClick: descargarBrief,
+    disabled: !stats.total
+  }, "⇩ Generar brief completo")), /*#__PURE__*/React.createElement("div", {
+    style: S.nota
+  }, "El brief incluye calendario editorial, palabras clave por intención, negativas y las restricciones de plataforma. Se genera con estadística agregada: ningún dato de paciente sale de este dispositivo."));
+}
+Object.assign(S, {
+  panelHead: {
+    marginBottom: 14
+  },
+  panelTitle: {
+    fontSize: 21,
+    fontWeight: 700,
+    color: "#10393F",
+    letterSpacing: "-.01em"
+  },
+  kpiRow: {
+    display: "flex",
+    gap: 10,
+    marginBottom: 18,
+    flexWrap: "wrap"
+  },
+  kpi: {
+    flex: "1 1 90px",
+    background: "#fff",
+    border: "1px solid #DCE3E1",
+    borderRadius: 8,
+    padding: "12px 14px"
+  },
+  kpiN: {
+    fontSize: 24,
+    fontWeight: 700,
+    color: "#10393F",
+    lineHeight: 1.1
+  },
+  kpiL: {
+    fontSize: 11.5,
+    color: "#66716F",
+    marginTop: 3,
+    letterSpacing: ".02em"
+  },
+  barRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 8
+  },
+  barLabel: {
+    flex: "0 0 42%",
+    fontSize: 12.5,
+    color: "#2A3B40"
+  },
+  barTrack: {
+    flex: 1,
+    height: 8,
+    background: "#EDF1F0",
+    borderRadius: 4,
+    overflow: "hidden"
+  },
+  barFill: {
+    height: "100%",
+    borderRadius: 4
+  },
+  barN: {
+    flex: "0 0 62px",
+    textAlign: "right",
+    fontSize: 11.5,
+    fontFamily: "'IBM Plex Mono', monospace",
+    color: "#66716F"
+  },
+  listRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    gap: 10,
+    padding: "6px 0",
+    borderBottom: "1px solid #EDF1F0",
+    fontSize: 13
+  },
+  temaTit: {
+    fontSize: 13.5,
+    fontWeight: 600,
+    color: "#10393F",
+    marginBottom: 5
+  },
+  temaItem: {
+    fontSize: 12.5,
+    color: "#4A5654",
+    lineHeight: 1.7
+  },
+  aviso: {
+    background: "#FBF0DC",
+    border: "1px solid #E8D5A8",
+    borderRadius: 8,
+    padding: "10px 12px",
+    fontSize: 12.5,
+    color: "#6B4E13",
+    marginBottom: 14
+  },
+  nota: {
+    fontSize: 11.5,
+    color: "#8A9491",
+    lineHeight: 1.7,
+    marginTop: 14
   }
 });
 

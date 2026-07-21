@@ -1,9 +1,9 @@
 /* Service worker: permite abrir la aplicación sin conexión.
    Estrategia: red primero para los archivos propios (así las
    actualizaciones llegan siempre), caché como respaldo. */
-const CACHE = "mxf-v7";
+const CACHE = "mxf-v8";
 const SHELL = [
-  "./", "./index.html", "./db.js", "./drive.js", "./app.js",
+  "./", "./index.html", "./db.js", "./drive.js", "./comercial.js", "./app.js",
   "./manifest.webmanifest", "./icon-192.png", "./icon-512.png",
   "https://unpkg.com/react@18.3.1/umd/react.production.min.js",
   "https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js",
