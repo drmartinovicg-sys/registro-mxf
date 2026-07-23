@@ -414,8 +414,11 @@ window.MXF_COMERCIAL = (function () {
 
   /* Estadística agregada. Recibe el índice (sin nombres para el cálculo). */
   function estadisticas(index, procFiltro) {
+    // Las fichas de directorio (importadas sin diagnóstico) quedan fuera:
+    // diluirían la mezcla real de casos quirúrgicos.
     const base = index.filter((e) =>
-      !procFiltro || (e.procedencia || "consulta") === procFiltro
+      !e.soloContacto &&
+      (!procFiltro || (e.procedencia || "consulta") === procFiltro)
     );
 
     const porCat = {};
@@ -451,7 +454,8 @@ window.MXF_COMERCIAL = (function () {
   function briefFocos(index) {
     const L = [];
     const hoy = new Date().toISOString().slice(0, 10);
-    const base = index.filter((e) => (e.procedencia || "consulta") === "consulta");
+    const base = index.filter((e) =>
+      !e.soloContacto && (e.procedencia || "consulta") === "consulta");
 
     const datos = (id) => {
       const f = FOCOS[id];
