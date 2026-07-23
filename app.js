@@ -145,6 +145,7 @@ const emptyPatient = () => ({
   nacimiento: "",
   sexo: "",
   telefono: "",
+  correo: "",
   prevision: "",
   antecedentes: "",
   alergias: "",
@@ -160,7 +161,8 @@ const emptyPatient = () => ({
   evoluciones: [],
   photoIds: [],
   driveFolder: null,
-  creado: todayISO()
+  creado: todayISO(),
+  soloContacto: false
 });
 
 /* ============================================================ */
@@ -168,6 +170,7 @@ function App() {
   const [drive, setDrive] = useState(Drive.status());
   const [screen, setScreen] = useState("list"); // list | form | patient | panel
   const [filterProc, setFilterProc] = useState(null);
+  const [vista, setVista] = useState("registro"); // registro | directorio
   const [index, setIndex] = useState([]);
   const [loading, setLoading] = useState(true);
   const [patient, setPatient] = useState(null);
@@ -203,13 +206,19 @@ function App() {
     procedencia: p.procedencia || "consulta",
     catDx: p.catDx,
     consentImg: p.consentImg || "no",
+    soloContacto: !!p.soloContacto,
     diagnostico: p.diagnostico,
     cirugia: p.cirugia,
     fechaCirugia: p.fechaCirugia,
     nFotos: p.photoIds.length,
     nEvo: p.evoluciones.length
   });
-  const savePatient = async p => {
+  const savePatient = async raw => {
+    // al recibir diagnóstico o cirugía, la ficha pasa del directorio al registro
+    const p = raw.soloContacto && (raw.diagnostico?.trim() || raw.cirugia?.trim()) ? {
+      ...raw,
+      soloContacto: false
+    } : raw;
     await sSet(`mxf-p:${p.id}`, p);
     setIndex(prev => {
       const next = [indexEntry(p), ...prev.filter(e => e.id !== p.id)];
@@ -240,12 +249,13 @@ function App() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return index.filter(e => {
+      if (vista === "registro" ? e.soloContacto : !e.soloContacto) return false;
       if (filterProc && (e.procedencia || "consulta") !== filterProc) return false;
       if (filterCat && e.catDx !== filterCat) return false;
       if (!q) return true;
       return [e.nombre, e.rut, e.folio, e.diagnostico, e.cirugia].some(v => (v || "").toLowerCase().includes(q));
     });
-  }, [index, search, filterCat, filterProc]);
+  }, [index, search, filterCat, filterProc, vista]);
   const grouped = useMemo(() => {
     if (!groupByDx) return null;
     const g = {};
@@ -367,6 +377,8 @@ function App() {
     setFilterCat: setFilterCat,
     filterProc: filterProc,
     setFilterProc: setFilterProc,
+    vista: vista,
+    setVista: setVista,
     groupByDx: groupByDx,
     setGroupByDx: setGroupByDx,
     onOpen: openPatient,
@@ -437,13 +449,28 @@ function ListScreen({
   setFilterCat,
   filterProc,
   setFilterProc,
+  vista,
+  setVista,
   groupByDx,
   setGroupByDx,
   onOpen,
   onBackup,
   onImport
 }) {
+  const nReg = index.filter(e => !e.soloContacto).length;
+  const nDir = index.filter(e => e.soloContacto).length;
   return /*#__PURE__*/React.createElement("div", null, /*#__PURE__*/React.createElement("div", {
+    style: S.vistaRow
+  }, /*#__PURE__*/React.createElement("button", {
+    className: vista === "registro" ? "seg seg-on" : "seg",
+    onClick: () => setVista("registro")
+  }, "Registro quirúrgico · ", nReg), /*#__PURE__*/React.createElement("button", {
+    className: vista === "directorio" ? "seg seg-on" : "seg",
+    onClick: () => setVista("directorio"),
+    style: {
+      marginLeft: -1
+    }
+  }, "Directorio · ", nDir)), /*#__PURE__*/React.createElement("div", {
     style: S.toolbar
   }, /*#__PURE__*/React.createElement("input", {
     style: S.search,
@@ -459,10 +486,12 @@ function ListScreen({
     style: {
       marginLeft: -1
     }
-  }, "Por diagnóstico")), /*#__PURE__*/React.createElement("div", {
+  }, "Por diagnóstico")), vista === "directorio" && /*#__PURE__*/React.createElement("div", {
+    style: S.avisoDir
+  }, "Fichas importadas desde Dentidesk. Al agregarles diagnóstico o cirugía pasan al registro quirúrgico."), vista === "registro" && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
     style: S.chipRow
   }, PROCS.map(x => {
-    const n = index.filter(e => (e.procedencia || "consulta") === x.id).length;
+    const n = index.filter(e => (e.procedencia || "consulta") === x.id && !e.soloContacto).length;
     const on = filterProc === x.id;
     return /*#__PURE__*/React.createElement("button", {
       key: x.id,
@@ -478,7 +507,7 @@ function ListScreen({
   })), /*#__PURE__*/React.createElement("div", {
     style: S.chipRow
   }, CATS.map(c => {
-    const n = index.filter(e => e.catDx === c.id).length;
+    const n = index.filter(e => e.catDx === c.id && !e.soloContacto).length;
     if (!n) return null;
     const on = filterCat === c.id;
     return /*#__PURE__*/React.createElement("button", {
@@ -491,7 +520,7 @@ function ListScreen({
       },
       onClick: () => setFilterCat(on ? null : c.id)
     }, c.label, " · ", n);
-  })), index.length === 0 && /*#__PURE__*/React.createElement("div", {
+  }))), index.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: S.empty
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -505,11 +534,11 @@ function ListScreen({
     }
   }, "Crea la primera ficha con el botón «+ Nueva ficha».")), index.length > 0 && filtered.length === 0 && /*#__PURE__*/React.createElement("div", {
     style: S.empty
-  }, "Sin resultados para esta búsqueda."), !groupByDx && filtered.map(e => /*#__PURE__*/React.createElement(PatientRow, {
+  }, "Sin resultados para esta búsqueda."), (!groupByDx || vista === "directorio") && filtered.map(e => /*#__PURE__*/React.createElement(PatientRow, {
     key: e.id,
     e: e,
     onOpen: onOpen
-  })), groupByDx && grouped && grouped.map(({
+  })), groupByDx && vista === "registro" && grouped && grouped.map(({
     cat,
     items
   }) => /*#__PURE__*/React.createElement("div", {
@@ -663,6 +692,12 @@ function PatientForm({
     style: S.input,
     value: p.telefono,
     onChange: set("telefono")
+  })), /*#__PURE__*/React.createElement(Field, {
+    label: "Correo"
+  }, /*#__PURE__*/React.createElement("input", {
+    style: S.input,
+    value: p.correo || "",
+    onChange: set("correo")
   })), /*#__PURE__*/React.createElement(Field, {
     label: "Previsión"
   }, /*#__PURE__*/React.createElement("input", {
@@ -1647,7 +1682,7 @@ input:focus, textarea:focus, select:focus { outline:2px solid #16606B33; border-
 /* ============================================================
    Barra de conexión con Google Drive
    ============================================================ */
-const APP_VERSION = "v10";
+const APP_VERSION = "v11";
 function DriveBar({
   drive,
   notify
@@ -1842,7 +1877,7 @@ function PanelComercial({
   const [proc, setProc] = useState("consulta");
   const C = window.MXF_COMERCIAL;
   const stats = useMemo(() => C.estadisticas(index, proc || null), [index, proc]);
-  const publicables = useMemo(() => index.filter(e => (!proc || (e.procedencia || "consulta") === proc) && e.consentImg === "difusion" && (e.nFotos || 0) > 0).length, [index, proc]);
+  const publicables = useMemo(() => index.filter(e => !e.soloContacto && (!proc || (e.procedencia || "consulta") === proc) && e.consentImg === "difusion" && (e.nFotos || 0) > 0).length, [index, proc]);
   const maxCat = stats.cats.length ? stats.cats[0].n : 1;
   const procLabel = proc ? procById(proc).label : "Todas las procedencias";
   const bajar = (texto, nombre) => {
@@ -1974,7 +2009,7 @@ function PanelComercial({
     const f = C.FOCOS[id];
     const cat = catById(f.cat || id);
     const rx = f.texto ? new RegExp(f.texto, "i") : null;
-    const casos = index.filter(e => (e.procedencia || "consulta") === "consulta" && e.catDx === (f.cat || id) && (!rx || rx.test(e.cirugia || "")));
+    const casos = index.filter(e => !e.soloContacto && (e.procedencia || "consulta") === "consulta" && e.catDx === (f.cat || id) && (!rx || rx.test(e.cirugia || "")));
     const pub = casos.filter(e => e.consentImg === "difusion" && (e.nFotos || 0) > 0).length;
     return /*#__PURE__*/React.createElement("div", {
       key: id,
@@ -2104,6 +2139,19 @@ Object.assign(S, {
     color: "#8A9491",
     lineHeight: 1.7,
     marginTop: 14
+  },
+  vistaRow: {
+    display: "flex",
+    marginBottom: 12
+  },
+  avisoDir: {
+    background: "#EDF1F0",
+    borderRadius: 6,
+    padding: "9px 12px",
+    fontSize: 12,
+    color: "#4A5654",
+    lineHeight: 1.6,
+    marginBottom: 12
   },
   nota2: {
     fontSize: 12,
